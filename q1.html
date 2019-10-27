@@ -1,0 +1,204 @@
+
+<!DOCTYPE html>
+<meta charset="utf-8">
+<svg width="960" height="500"></svg>
+<script src="d3.v5-9-1.js"></script>
+<style>
+    div.tooltip {
+        position: absolute;
+        text-align: center;
+        width: 60px;
+        height: 100px;
+        padding: 2px;
+        font: 12px sans-serif;
+        background: lightsteelblue;
+        border: 0px;
+        border-radius: 20px;
+        pointer-events: none;
+    }</style>
+<script>
+    /*
+    Please note, stacked bar chart was made following this tutorial.
+    https://bl.ocks.org/mbostock/b5935342c6d21928111928401e2c8608
+    Loading in csv data file was follwed using this documentation:
+    http://learnjsdata.com/read_data.html
+    Hovering tooltip was followed using this:
+    http://bl.ocks.org/d3noob/a22c42db65eb00d4e369
+     */
+//Loading in data using d3 function
+d3.csv("data.csv", function(d) {
+    return {
+        totalVictims: +d["Total victims"],
+        mentalHealth: d["Mental Health Issues"],
+        injured: +d.Injured,
+        fatalities: +d.Fatalities
+    };
+}).then(function(data) {
+    /*
+    * More data processing, the tedious way
+    *
+    */
+    var sumInjuredNoMentalHealth = 0;
+    var sumFatalitiesNoMentalHealth = 0;
+    for(i =0; i < data.length; i++)
+    {
+        if(data[i].mentalHealth === "No")
+        {
+            sumInjuredNoMentalHealth = sumInjuredNoMentalHealth + data[i].injured;
+            sumFatalitiesNoMentalHealth = sumFatalitiesNoMentalHealth + data[i].fatalities;
+        }
+    }
+
+    var sumInjuredYesMentalHealth = 0;
+    var sumFatalitiesYesMentalHealth = 0;
+    for(i =0; i < data.length; i++)
+    {
+        if(data[i].mentalHealth === "Yes")
+        {
+            sumInjuredYesMentalHealth = sumInjuredYesMentalHealth + data[i].injured;
+            sumFatalitiesYesMentalHealth = sumFatalitiesYesMentalHealth + data[i].fatalities;
+        }
+    }
+
+    var sumInjuredUnclearMentalHealth = 0;
+    var sumFatalitiesUnclearMentalHealth = 0;
+    for(i =0; i < data.length; i++)
+    {
+        if(data[i].mentalHealth === "Unclear")
+        {
+            sumInjuredUnclearMentalHealth = sumInjuredUnclearMentalHealth + data[i].injured;
+            sumFatalitiesUnclearMentalHealth = sumFatalitiesUnclearMentalHealth + data[i].fatalities;
+        }
+    }
+
+    var sumInjuredUnknownMentalHealth = 0;
+    var sumFatalitiesUnknownMentalHealth = 0;
+    for(i =0; i < data.length; i++)
+    {
+        if(data[i].mentalHealth === "Unknown")
+        {
+            sumInjuredUnknownMentalHealth = sumInjuredUnknownMentalHealth + data[i].injured;
+            sumFatalitiesUnknownMentalHealth = sumFatalitiesUnknownMentalHealth + data[i].fatalities;
+        }
+    }
+    var newData = [
+        {mentalHealth:"No", injured: sumInjuredNoMentalHealth, fatalities: sumFatalitiesNoMentalHealth},
+        {mentalHealth:"Yes", injured: sumInjuredYesMentalHealth, fatalities: sumFatalitiesYesMentalHealth},
+        {mentalHealth:"Unclear", injured: sumInjuredUnclearMentalHealth, fatalities: sumFatalitiesUnclearMentalHealth},
+        {mentalHealth:"Unknown", injured: sumInjuredUnknownMentalHealth, fatalities: sumFatalitiesUnknownMentalHealth}
+
+    ];
+    //creating stack that will be placed on chart
+    var series = d3.stack()
+        .keys(["fatalities", "injured"])
+        .offset(d3.stackOffsetDiverging)
+        (newData);
+
+    var svg = d3.select("svg"),
+        margin = {top: 50, right: 30, bottom: 100, left: 100},
+        width = +svg.attr("width"),
+        height = +svg.attr("height");
+    //creating x axis
+    var x = d3.scaleBand()
+        .domain(newData.map(function(d) { return d.mentalHealth; }))
+        .range([margin.left, width - margin.right, 0])
+        .padding(0.1);
+
+    //creating y axis
+    var y = d3.scaleLinear()
+        .domain([d3.min(series, stackMin), d3.max(series, stackMax)])
+        .rangeRound([height - margin.bottom, margin.top]);
+
+    var z = d3.scaleOrdinal(d3.schemeCategory10);
+    //Creating hover tooltip
+    var div = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0);
+    svg.append("g")
+        .selectAll("g")
+        .data(series)
+        .enter().append("g")
+        .attr("fill", function(d) { return z(d.key); })
+        .selectAll("rect")
+        .data(function(d) { return d; })
+        .enter().append("rect")
+        .attr("width", x.bandwidth)
+        .attr("x", function(d) { return x(d.data.mentalHealth); })
+        .attr("y", function(d) { return y(d[1]); })
+        .attr("height", function(d) { return y(d[0]) - y(d[1]); })
+        .on("mouseover", function(d) {
+            div.transition()
+                .duration(200)
+                .style("opacity", .9);
+            div	.html("Total Injured: " + d.data.injured + "<br/>"  + "Total Killed: " + d.data.fatalities)
+                .style("left", (d3.event.pageX) + "px")
+                .style("top", (d3.event.pageY ) + "px");
+        })
+        .on("mouseout", function(d) {
+            div.transition()
+                .duration(500)
+                .style("opacity", 0);
+        });
+    //drawing x axis
+    svg.append("g")
+        .attr("transform", "translate(0," + y(0) + ")")
+        .call(d3.axisBottom(x));
+
+    svg.append("text")
+        .attr("x", 420 )
+        .attr("y",  450 )
+        .style("text-anchor", "middle")
+        .text("Mental Health Issues?");
+    //drawing y axis
+    svg.append("g")
+        .attr("transform", "translate(" + margin.left + ",0)")
+        .call(d3.axisLeft(y));
+
+    svg.append("text")
+        .attr("x", -50 )
+        .attr("y",  175 )
+        .attr("transform", "rotate(-90, 20, 150)")
+        .style("text-anchor", "middle")
+        .text("Total Victims");
+
+    svg.append("text")
+        .attr("x", 420 )
+        .attr("y",  20 )
+        .style("text-anchor", "middle")
+        .text("Does being diagnosed with a mental health issue imply deadlier shootings?");
+
+    //Creating legend
+    svg.append("circle")
+        .attr("cx",800)
+        .attr("cy",30)
+        .attr("r", 6)
+        .style("fill", "#ffa500");
+    svg.append("circle")
+        .attr("cx",800)
+        .attr("cy",60)
+        .attr("r", 6)
+        .style("fill", "#1f77b4");
+    svg.append("text")
+        .attr("x", 820)
+        .attr("y", 30)
+        .text("Injured")
+        .style("font-size", "15px")
+        .attr("alignment-baseline","middle");
+    svg.append("text")
+        .attr("x", 820)
+        .attr("y", 60)
+        .text("Fatalities")
+        .style("font-size", "15px")
+        .attr("alignment-baseline","middle");
+
+    function stackMin(serie) {
+        return d3.min(serie, function(d) { return d[0]; });
+    }
+
+    function stackMax(serie) {
+        return d3.max(serie, function(d) { return d[1]; });
+    }
+    });
+
+
+</script>
